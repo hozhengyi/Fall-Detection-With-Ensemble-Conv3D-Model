@@ -1,0 +1,147 @@
+## ho zheng yi: atttempt 1
+## reads images from desktop and converts to tensors
+
+'''
+good feature 1: find a way so that os.join.path in folder_directory_to_numpy() can add or remove blackslashes
+good feature 2: include exception handling at temporal_windower() to determine length given shift, window_size and original temporal length
+
+
+'''
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import imageio
+%matplotlib inline
+
+
+
+#---------------------------------------------------------------------------------------------------------------
+def folder_directory_to_numpy(directory_path,resized_dim, window_size,shift,threshold,np_dtype=float):
+    # calls image_folder_to_numpy() and temporal_windower() for each folder in the directory
+    
+    
+    # creates a list of all subfolders inside the given directory_path
+    # each folder represents one video and all the frame jpegs are stored inside
+    list_of_folder_names = sorted([n for n in os.listdir(directory_path) if os.path.isdir(os.path.join(directory_path, n))])
+    list_of_sliced_frames_by_folder = []
+    
+    
+    # runs thru all folder names in the given directory_path
+    # calls image_folder_to_numpy() and temporal_windower()
+    for folder in list_of_folder_names:
+        array_of_frames_for_one_folder_only = image_folder_to_numpy(os.path.join(directory_path+folder),resized_dim)  
+        temporally_sliced_for_one_folder_only = temporal_windower(array_of_frames_for_one_folder_only, window_size,shift, threshold)
+        list_of_sliced_frames_by_folder.append(temporally_sliced_for_one_folder_only.astype(np_dtype))
+    
+    
+    # raise exception to ensure correct shapes
+    if len(list_of_sliced_frames_by_folder) != len(list_of_folder_names):
+        raise Exception('folder_directory_to_numpy: Incorrect list_of_sliced_frames_by_folder length', len(list_of_sliced_frames_by_folder), 'vs',len(list_of_folder_names) )
+    total_videos_extracted = 0
+    for folder_array in list_of_sliced_frames_by_folder:
+        total_videos_extracted += len(folder_array)
+        if folder_array.ndim != 5:
+            raise Exception('folder_directory_to_numpy: expected ndims =4, got',folder_array.nidm )
+        if folder_array.shape != (len(folder_array), window_size, resized_dim[0],resized_dim[1],3):
+            raise Exception('folder_directory_to_numpy: expected',(len(folder_array), window_size, resized_dim[0],resized_dim[1],3),'but got',folder_array.shape)
+        
+    
+    print('')
+    print('Extraction successful!')
+    print('A total of ',total_videos_extracted,'videos extracted')
+    print('shape per video = ',(window_size, resized_dim[0],resized_dim[1],3))
+    # list of 4D tensors [5D, 5D, 5D .... etc]
+    return list_of_sliced_frames_by_folder
+
+#---------------------------------------------------------------------------------------------------------------
+
+def image_folder_to_numpy(folder_path, resized_dim): 
+    #converts a given folder of png files, resizes it and turns it to one numpy array
+    
+    print('extracting from folder: ',folder_path)
+    #runs thru all jpegs inside one folder, performs RGB2BGR and resizes it
+    list_dir = [folder_path +'/'+ ff for ff in sorted([f for f in os.listdir(folder_path)])]
+    list_of_frames = [cv2.cvtColor(cv2.imread(path),cv2.COLOR_RGB2BGR) for path in list_dir]
+    list_of_frames = [cv2.resize(frame, resized_dim, cv2.INTER_AREA) for frame in list_of_frames]
+    array_of_frames = np.array(list_of_frames)
+    
+    if array_of_frames.shape != (len(list_of_frames), resized_dim[0], resized_dim[1], 3):
+        raise Exception('imagefiles_to_numpy: Incorrect Array Shape', array_of_frames.shape)
+    
+    # 4D tensor(timesteps, h, w, channels)
+    return array_of_frames
+    
+#---------------------------------------------------------------------------------------------------------------
+
+def temporal_windower(numpy_array, window_size,shift,threshold):
+    #takes (timesteps,224,224,3)
+    
+    if numpy_array.ndim != 4: raise Exception('temporal_windower: Incorrect np ndim:', numpy_array.ndim)
+    threshold = int(threshold)
+    window_size = int(window_size)
+    shift = int(shift)
+    list_of_arrays = []
+    start = 0
+    
+    while True:
+        window = numpy_array[start:start+window_size ,:, :,:]
+        
+        if len(window) < window_size: # dealing with remainders
+            frames_to_fill = abs(window_size - len(window))
+            
+            if  frames_to_fill <= threshold: #pad with final frame if lower than threshold
+                last_frame = numpy_array[-1,:,:,:].reshape(1,numpy_array.shape[1],numpy_array.shape[2],numpy_array.shape[3])
+                for y in range(frames_to_fill): window = np.append(window, last_frame, axis=0)      
+                list_of_arrays.append(window)
+                break
+                
+            else: #remainder too little, discard
+                print('Discarding',frames_to_fill,'frames because remainder =',len(window))
+                break
+        
+        list_of_arrays.append(window)
+        start += shift
+    
+    
+    #returns (amount, new_sliced_timestep, 224, 224, 3)
+    return np.array(list_of_arrays)
+
+#---------------------------------------------------------------------------------------------------------------
+
+def numpy_frames_to_gif(numpy_array,file_name='animation'):
+    #turns a (timestep,h,w,c) to a gif file for viewing purposes   
+    numpy_array = np.clip(numpy_array,0,255).astype(np.uint8)
+    print(numpy_array.dtype)
+    imageio.mimsave('/home/yehyoon/UR_Fall_Detection_Dataset/{}.gif'.format(file_name), numpy_array, fps=24)
+    
+## ho zheng yi: atttempt 1
+## VIDEO TO FRAME CONVERTER
+
+
+# import the opencv library
+import cv2
+import matplotlib.pyplot as plt
+from google.colab.patches import cv2_imshow
+list_of_frames = []
+
+# define a video capture object
+vid = cv2.VideoCapture('/content/cam2.avi')
+while(True):  
+    # Capture the video frame
+    # by frame
+    ret, frame = vid.read()
+    list_of_frames.append(frame)
+    # the 'q' button is set as the
+    # quitting button you may use any
+    # desired button of your choice
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break       
+# After the loop release the cap object
+vid.release()
+# Destroy all the windows
+cv2.destroyAllWindows()
+    
+
+    
