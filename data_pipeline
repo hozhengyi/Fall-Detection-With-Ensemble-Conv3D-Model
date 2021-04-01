@@ -1,10 +1,130 @@
-## ho zheng yi: atttempt 1
-## reads images from desktop and converts to tensors
+## VIDEO TO FRAME CONVERTER
+'''
+by ho zheng yi, v1
+
+good feature 1: do a check to ensure files are .avi/.mp4/etc 
+in the folder_of_videos_to_frames() function before feeding it into files
+'''
+
+
+# import the opencv library
+import cv2
+import matplotlib.pyplot as plt
+import os
+
+
+def get_frame(sec, frame_save_to, count):
+    #actual function that handles the video-to-frame- conversion
+    # takes imwrite path 
+    
+    vidcap.set(cv2.CAP_PROP_POS_MSEC,sec*1000)
+    hasFrames,image = vidcap.read()
+    if hasFrames:
+        cv2.imwrite(os.path.join(frame_save_to,"image{}.png".format(count)),image)
+    
+    #bool-like value
+    return hasFrames
+
+#---------------------------------------------------------------------------------------------------------------
+
+def avi_to_frames(video_path, frame_directory, frame_rate = 0.04, folder_name = "fall-{}-cam0-rgb", file_count = 31):
+    #gets path to one video, and calls get_frame()
+    #creates a folder in frame_directory, and stores all frames inside that folder
+
+    if not os.path.isdir(frame_directory): raise Exception('avi_to_frames():',frame_directory,'is not a directory')
+    if not os.path.isfile(video_path): raise Exception('avi_to_frames():',video_path,'is not a file')
+    if 1 < frame_rate < 0.001: raise Exception('avi_to_frames(): frame_rate must be between 0.001 and 1, yours is',frame_rate) 
+    #if frame_directory[-1] != '/': raise Exception('avi_to_frames(): place a / at the end of', frame_directory)
+    #if folder_name[-1] != '/': raise Exception('avi_to_frames(): place a / at the end of', folder_name)
+
+
+    file_count = int(file_count)
+    vidcap = cv2.VideoCapture(video_path)
+    
+        
+    sec = 0
+    frameRate = frame_rate # it will capture image in each frame_rate second
+    count=1
+    try:
+        os.mkdir(os.path.join(frame_directory,folder_name.format(str(file_count))))
+    except:
+        raise Exception('avi_to_frames(): failed to make frame_folder ',frame_directory + folder_name.format(str(file_count)))
+    
+    success = get_frame(sec,os.path.join(frame_directory,folder_name.format(str(file_count))), count)
+    while success:
+        count += 1
+        sec = sec + frameRate
+        sec = round(sec, 2)
+        success = get_frame(sec,os.path.join(frame_directory,folder_name.format(str(file_count))), count)
+    
+    print('Successful conversion: ',len(os.listdir(os.path.join(frame_directory,folder_name.format(str(file_count))))),'frames in',os.path.join(frame_directory,folder_name.format(str(file_count))))
+    
+    
+    #doesnt return anything
+    return None
+
+#---------------------------------------------------------------------------------------------------------------
+
+
+def depth_checker(path, depth=0):
+    #takes a path
+    #calls itself recursively
+    
+    if not os.path.isdir(path) : return depth
+    maxdepth = 0
+    for entry in os.listdir(path):
+        fullpath = os.path.join(path,entry)
+        maxdepth = max(maxdepth, depth_checker(fullpath,depth+1))
+        
+    #returns int
+    return maxdepth
+
+#---------------------------------------------------------------------------------------------------------------
+
+
+def folder_of_videos_to_frames(folder_full_of_videos,frame_directory,frame_rate = 0.04, folder_name = "fall-{}-cam0-rgb", start_file_count = 31):
+    # converts a folder full of videos to folders of frames
+    # each folder_frame represents ONE video
+    # (i.e 6 videos will generate 6 folders >> each folder will have n number of frames)
+    # calls avi_to_frames() and depth_checker()
+   
+    if not os.path.exists(folder_full_of_videos): raise Exception('folder_of_videos_to_frames(): invalid folder_full_of_videos',folder_full_of_videos)
+    
+    if not os.path.exists(frame_directory):
+        try:
+            os.mkdir(frame_directory)
+        except: raise Exception('folder_of_videos_to_frames(): invalid frame_directory',frame_directory)
+    
+    if depth_checker(folder_full_of_videos) != 2: 
+        raise Exception('folder_of_videos_to_frames(): only depth 2 folders allowed, yours is',depth_checker(folder_full_of_videos))
+    
+    
+    
+    avi_list = [] #stores ALL avis files, including those in subdirs
+    first_layer = True
+    for root, subdirs, file in os.walk(folder_full_of_videos):
+        if first_layer is True:
+            first_layer = False       
+            continue
+        for avi in file:
+            print(avi)
+            fullpath_to_one_avi = os.path.join(root,avi)
+            avi_list.append(fullpath_to_one_avi)
+            
+    print('Found',len(avi_list),'videos in',folder_full_of_videos)
+    for video in sorted(avi_list):
+        avi_to_frames(video, frame_directory, frame_rate = frame_rate, folder_name = folder_name, file_count = start_file_count)
+        start_file_count += 1
+    
+    #returns nothing    
+    return None
+    
+## FRAME TO NUMPY CONVERTER
 
 '''
+by ho zheng yi, v1
 good feature 1: find a way so that os.join.path in folder_directory_to_numpy() can add or remove blackslashes
 good feature 2: include exception handling at temporal_windower() to determine length given shift, window_size and original temporal length
-
 
 '''
 
@@ -13,55 +133,62 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import imageio
-%matplotlib inline
-
-
+# %matplotlib inline
 
 #---------------------------------------------------------------------------------------------------------------
-def folder_directory_to_numpy(directory_path,resized_dim, window_size,shift,threshold,np_dtype=float):
+def folder_directory_to_numpy(directory_path,numpy_save_to,resized_dim, window_size,shift,threshold,np_dtype=float,np_start_count=0):
     # calls image_folder_to_numpy() and temporal_windower() for each folder in the directory
+    # converts all frames to numpy as saves it
+    # one numpy file represents one video with several overlapping windows
     
+    if not os.path.exists(directory_path): raise Exception('folder_directory_to_numpy(): Invalid directory_path',directory_path)
+    if not os.path.exists(numpy_save_to):
+        try:
+            os.mkdir(numpy_save_to)
+        except:
+            raise Exception('folder_directory_to_numpy(): Invalid numpy_save_to', numpy_save_to)
     
+    if not os.path.exists(numpy_save_to): raise Exception('folder_directory_to_numpy(): Invalid folder_directory_to_numpy',folder_directory_to_numpy)
     # creates a list of all subfolders inside the given directory_path
     # each folder represents one video and all the frame jpegs are stored inside
     list_of_folder_names = sorted([n for n in os.listdir(directory_path) if os.path.isdir(os.path.join(directory_path, n))])
-    list_of_sliced_frames_by_folder = []
     
     
+    np_counter = int(np_start_count)
+    total_gifs_count = 0
     # runs thru all folder names in the given directory_path
     # calls image_folder_to_numpy() and temporal_windower()
     for folder in list_of_folder_names:
-        array_of_frames_for_one_folder_only = image_folder_to_numpy(os.path.join(directory_path+folder),resized_dim)  
+        array_of_frames_for_one_folder_only = image_folder_to_numpy(os.path.join(directory_path,folder),resized_dim)  
         temporally_sliced_for_one_folder_only = temporal_windower(array_of_frames_for_one_folder_only, window_size,shift, threshold)
-        list_of_sliced_frames_by_folder.append(temporally_sliced_for_one_folder_only.astype(np_dtype))
-    
+        
+        total_gifs_count += temporally_sliced_for_one_folder_only.shape[0]
+        np.save(os.path.join(numpy_save_to,'numpy-{}.npy'.format(np_counter)),temporally_sliced_for_one_folder_only.astype(np_dtype))
+        np_counter += 1
     
     # raise exception to ensure correct shapes
-    if len(list_of_sliced_frames_by_folder) != len(list_of_folder_names):
-        raise Exception('folder_directory_to_numpy: Incorrect list_of_sliced_frames_by_folder length', len(list_of_sliced_frames_by_folder), 'vs',len(list_of_folder_names) )
-    total_videos_extracted = 0
-    for folder_array in list_of_sliced_frames_by_folder:
-        total_videos_extracted += len(folder_array)
-        if folder_array.ndim != 5:
-            raise Exception('folder_directory_to_numpy: expected ndims =4, got',folder_array.nidm )
-        if folder_array.shape != (len(folder_array), window_size, resized_dim[0],resized_dim[1],3):
-            raise Exception('folder_directory_to_numpy: expected',(len(folder_array), window_size, resized_dim[0],resized_dim[1],3),'but got',folder_array.shape)
-        
+    if np_counter != len(list_of_folder_names):
+        raise Exception('folder_directory_to_numpy: Incorrect np_counter length', np_counter, 'vs',len(list_of_folder_names) )
+
     
     print('')
     print('Extraction successful!')
-    print('A total of ',total_videos_extracted,'videos extracted')
-    print('shape per video = ',(window_size, resized_dim[0],resized_dim[1],3))
-    # list of 4D tensors [5D, 5D, 5D .... etc]
-    return list_of_sliced_frames_by_folder
+    print('A total of ',total_gifs_count,'gifs extracted from', np_counter,'folders')
+    print('shape per gif = ',(window_size, resized_dim[0],resized_dim[1],3))
+    
+    print('saved',np_counter,'numpy files in',numpy_save_to)
+    
+    #returns nonthing
+    return None
 
 #---------------------------------------------------------------------------------------------------------------
 
 def image_folder_to_numpy(folder_path, resized_dim): 
     #converts a given folder of png files, resizes it and turns it to one numpy array
     
-    print('extracting from folder: ',folder_path)
+    
     #runs thru all jpegs inside one folder, performs RGB2BGR and resizes it
+    print('extracting from folder: ',folder_path)
     list_dir = [folder_path +'/'+ ff for ff in sorted([f for f in os.listdir(folder_path)])]
     list_of_frames = [cv2.cvtColor(cv2.imread(path),cv2.COLOR_RGB2BGR) for path in list_dir]
     list_of_frames = [cv2.resize(frame, resized_dim, cv2.INTER_AREA) for frame in list_of_frames]
@@ -107,41 +234,10 @@ def temporal_windower(numpy_array, window_size,shift,threshold):
     
     #returns (amount, new_sliced_timestep, 224, 224, 3)
     return np.array(list_of_arrays)
-
 #---------------------------------------------------------------------------------------------------------------
 
-def numpy_frames_to_gif(numpy_array,file_name='animation'):
+def numpy_frames_to_gif(numpy_array,file_name='animation', fps = 24):
     #turns a (timestep,h,w,c) to a gif file for viewing purposes   
     numpy_array = np.clip(numpy_array,0,255).astype(np.uint8)
     print(numpy_array.dtype)
-    imageio.mimsave('/home/yehyoon/UR_Fall_Detection_Dataset/{}.gif'.format(file_name), numpy_array, fps=24)
-    
-## ho zheng yi: atttempt 1
-## VIDEO TO FRAME CONVERTER
-
-
-# import the opencv library
-import cv2
-import matplotlib.pyplot as plt
-from google.colab.patches import cv2_imshow
-list_of_frames = []
-
-# define a video capture object
-vid = cv2.VideoCapture('/content/cam2.avi')
-while(True):  
-    # Capture the video frame
-    # by frame
-    ret, frame = vid.read()
-    list_of_frames.append(frame)
-    # the 'q' button is set as the
-    # quitting button you may use any
-    # desired button of your choice
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break       
-# After the loop release the cap object
-vid.release()
-# Destroy all the windows
-cv2.destroyAllWindows()
-    
-
-    
+    imageio.mimsave('/home/yehyoon/UR_Fall_Detection_Dataset/{}.gif'.format(file_name), numpy_array, fps=fps)
