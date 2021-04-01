@@ -159,11 +159,14 @@ def folder_directory_to_numpy(directory_path,numpy_save_to,resized_dim, window_s
     # calls image_folder_to_numpy() and temporal_windower()
     for folder in list_of_folder_names:
         array_of_frames_for_one_folder_only = image_folder_to_numpy(os.path.join(directory_path,folder),resized_dim)  
-        temporally_sliced_for_one_folder_only = temporal_windower(array_of_frames_for_one_folder_only, window_size,shift, threshold)
-        
-        total_gifs_count += temporally_sliced_for_one_folder_only.shape[0]
-        np.save(os.path.join(numpy_save_to,'numpy-{}.npy'.format(np_counter)),temporally_sliced_for_one_folder_only.astype(np_dtype))
-        np_counter += 1
+        temporally_sliced_for_one_folder_only = temporal_windower(array_of_frames_for_one_folder_only, window_size,shift, threshold,os.path.join(directory_path,folder))
+        if temporally_sliced_for_one_folder_only == 1: 
+            np_counter += 1
+
+        else:           
+            total_gifs_count += temporally_sliced_for_one_folder_only.shape[0]
+            np.save(os.path.join(numpy_save_to,'numpy-{}.npy'.format(np_counter)),temporally_sliced_for_one_folder_only.astype(np_dtype))
+            np_counter += 1
     
     # raise exception to ensure correct shapes
     if np_counter != len(list_of_folder_names):
@@ -201,7 +204,7 @@ def image_folder_to_numpy(folder_path, resized_dim):
     
 #---------------------------------------------------------------------------------------------------------------
 
-def temporal_windower(numpy_array, window_size,shift,threshold):
+def temporal_windower(numpy_array, window_size,shift,threshold,file_path):
     #takes (timesteps,224,224,3)
     
     if numpy_array.ndim != 4: raise Exception('temporal_windower: Incorrect np ndim:', numpy_array.ndim)
@@ -224,15 +227,21 @@ def temporal_windower(numpy_array, window_size,shift,threshold):
                 break
                 
             else: #remainder too little, discard
-                print('Discarding',frames_to_fill,'frames because remainder =',len(window))
+                print('Ignoring',frames_to_fill,'frames because remainder =',len(window))
                 break
         
         list_of_arrays.append(window)
         start += shift
     
-    
+    if len(list_of_arrays) == 0:
+        print('Ignoring entire sequence in : ',file_path)
+        
+        # returns 1 if no windows are taken.
+        return 1
+        
+    else:
     #returns (amount, new_sliced_timestep, 224, 224, 3)
-    return np.array(list_of_arrays)
+        return np.array(list_of_arrays)
 #---------------------------------------------------------------------------------------------------------------
 
 def numpy_frames_to_gif(numpy_array,file_name='animation', fps = 24):
