@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import os
 
 
-def get_frame(sec, frame_save_to, count):
+def get_frame(sec, frame_save_to, count,vidcap):
     #actual function that handles the video-to-frame- conversion
     # takes imwrite path 
     
@@ -50,12 +50,12 @@ def avi_to_frames(video_path, frame_directory, frame_rate = 0.04, folder_name = 
     except:
         raise Exception('avi_to_frames(): failed to make frame_folder ',frame_directory + folder_name.format(str(file_count)))
     
-    success = get_frame(sec,os.path.join(frame_directory,folder_name.format(str(file_count))), count)
+    success = get_frame(sec,os.path.join(frame_directory,folder_name.format(str(file_count))), count,vidcap)
     while success:
         count += 1
         sec = sec + frameRate
         sec = round(sec, 2)
-        success = get_frame(sec,os.path.join(frame_directory,folder_name.format(str(file_count))), count)
+        success = get_frame(sec,os.path.join(frame_directory,folder_name.format(str(file_count))), count,vidcap)
     
     print('Successful conversion: ',len(os.listdir(os.path.join(frame_directory,folder_name.format(str(file_count))))),'frames in',os.path.join(frame_directory,folder_name.format(str(file_count))))
     
