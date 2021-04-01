@@ -107,7 +107,6 @@ def folder_of_videos_to_frames(folder_full_of_videos,frame_directory,frame_rate 
             first_layer = False       
             continue
         for avi in file:
-            print(avi)
             fullpath_to_one_avi = os.path.join(root,avi)
             avi_list.append(fullpath_to_one_avi)
             
